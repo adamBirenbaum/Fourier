@@ -72,6 +72,7 @@ server <- function(input,output){
     A <- paste0(coef_list$an,"*cos(",n*pi/L,"*x)",collapse = "+")
     B <- paste0(coef_list$bn,"*sin(",n*pi/L,"*x)",collapse = "+")
     equation_string <- paste0(coef_list$a0,"+",A,"+",B,collapse = "+")
+
     x <- seq(from = min(lb)*expand_plot,to = max(up)*expand_plot,length.out = 500)
     y <- eval(parse(text = equation_string))  
     data.frame(x = x, y=y)
@@ -215,6 +216,61 @@ server <- function(input,output){
   
   }
   
+  animate_fourier3 <- function(df,n,speed){
+    
+    N <- 100
+    #x <- seq(from = min(lb),to = max(up),length.out = N)
+    npeak <- n / 2 + 1
+    tt <- seq(from =0, to = 2, length.out = N)
+    
+    xx <- fft(df$y)
+    df2 <- plot.frequency.spectrum(xx,xlimits = c(0,150))
+    
+    # summary(df2[1:100,2])
+    # iqr <- IQR(df2[1:100,2])
+    # inten <- df2[1:100,2][which(df2[1:100,2] > 10*iqr)]
+          
+    inten <- sort(df2[1:100,2],decreasing = T)[1:npeak]
+    freq <- df2[1:100,1][which(df2[1:100,2] %in% inten)] *speed
+    R <- inten / inten[1]
+    
+    z <- 1:(N*length(inten))
+    df_final <- data.frame(x = 0, y =0, xend = z, yend = z,time =0, grp = 0, lin = 1)
+
+    
+    for (i in 1:length(inten)){
+    
+      i1 <- N*(i-1) + 1
+      e1 <- i1 + N - 1
+      if (i == 1){
+        df_final$xend[1:N] <- R[i]*cos(2*pi*freq[i]*tt)
+        df_final$yend[1:N] <- R[i]*sin(2*pi*freq[i]*tt)
+        df_final$time[1:N] <- 1:N
+      }else{
+   
+        df_final$x[i1:e1] <- df_final$xend[(i1:e1) - N]
+        df_final$y[i1:e1] <- df_final$yend[(i1:e1) - N]
+        df_final$xend[i1:e1] <- df_final$xend[(i1:e1) - N]+ R[i]*cos(2*pi*freq[i]*tt)
+        df_final$yend[i1:e1]  <- df_final$yend[(i1:e1) - N] + R[i]*sin(2*pi*freq[i]*tt)
+        df_final$time[i1:e1] <- 1:N
+        
+     
+      }
+      df_final$grp[i1:e1]  <- i
+
+      
+    }
+    
+    ii <- N*(i-1)+ 1
+    ee <- ii + N -1
+    maxx <- max(df_final$xend)
+    df2 <- data.frame(x = maxx*1.05 ,y = df_final$yend[ii:ee],xend = df_final$xend[ii:ee] , yend = df_final$yend[ii:ee],time = 1:N,grp = i+1,lin = 2)
+    df_final <- rbind(df_final,df2)
+    
+    df_final
+    
+  }
+  
   observeEvent(input$enter,{
     browser()
     df <- animate_fourier(c("-3","3"),c(-pi,0),c(0,pi),7,constant = T)
@@ -225,7 +281,7 @@ server <- function(input,output){
     tt <- seq(from =0, to = 2, length.out = 100)
     df2$x <- df2$x + tt*5
     g1 <- ggplot(df, aes(x = x,y = y,xend = xend,yend =yend,color = factor(grp),linetype = factor(lin))) + geom_segment(size = 2,show.legend = F) + transition_time(time) + ease_aes('linear')+
-      theme_void()
+      theme_void() 
 
 
     
@@ -244,6 +300,54 @@ server <- function(input,output){
   }      
   )
   
+  plot.frequency.spectrum <- function(X.k, xlimits=c(0,length(X.k))) {
+    plot.data  <- cbind(0:(length(X.k)-1), Mod(X.k))
+    
+    # TODO: why this scaling is necessary?
+    plot.data[2:length(X.k),2] <- 2*plot.data[2:length(X.k),2] 
+    
+    plot(plot.data, t="h", lwd=2, main="", 
+         xlab="Frequency (Hz)", ylab="Strength", 
+         xlim=xlimits, ylim=c(0,max(Mod(plot.data[,2]))))
+    plot.data
+  }
+  
+  
+  observeEvent(input$animation_enter,{
+
+    #df <- animate_fourier(c("-3","3"),c(-pi,0),c(0,pi),5,constant = T)
+    n <- input$anim_square_terms
+    speed <- switch(as.numeric(input$speed),2,1,.5,.25)
+    fps <- switch (as.numeric(input$fps),5,10,20,30)
+    frames <- switch(as.numeric(input$fps), 100,200,300,400)
+    df <- get_fourier_points(c("-3","3"),c(-pi,0),c(0,pi),n,constant = T,expand_plot = 3)
+    
+    df <- animate_fourier3(df,n,speed)
+    
+    g1 <- ggplot(df, aes(x = x,y = y,xend = xend,yend =yend,color = factor(grp),linetype = factor(lin))) + geom_segment(size = 2,show.legend = F) + transition_time(time) + ease_aes('linear')+
+      coord_fixed(expand = F) + theme_void()
+    a1 <- animate(g1, nframes = frames, fps = fps)
+    
+    anim_save(filename = "a1.gif",animation = a1,path = path_to_folder,height = 250)
+    
+    output$anim1 <- renderImage(list(src =paste0(path_to_folder,"/a1.gif"),contentType = 'image/gif' ),deleteFile = T)
+    
+    tt <- seq(from =0, to = 2, length.out = 100)
+    df2 <- df[(nrow(df) - 99):(nrow(df)),1:2]
+    df2$x <- df2$x + tt*5
+    
+    g2 <- ggplot(df2, aes(x = x,y = y)) + geom_line(size = 2) + transition_reveal(x) + ease_aes('linear') + theme_void()
+    
+    a2 <- animate(g2, nframes = frames, fps = fps)
+    
+    anim_save(filename = "a2.gif",animation = a2,path = path_to_folder,height = 250)
+    
+    output$anim2 <- renderImage(list(src =paste0(path_to_folder,"/a2.gif"),contentType = 'image/gif' ),deleteFile = T)
+    
+    
+  })
+  
+
   
   observeEvent(input$square_enter,{
     
@@ -253,6 +357,7 @@ server <- function(input,output){
     n <- input$square_terms
     df <- get_fourier_points(f,c(-pi,0),c(0,pi),n,constant = T,expand_plot = 3)
     
+
     output$square_output <- renderPlot(
       ggplot(df, aes(x,y)) + geom_line() + coord_fixed() + theme_void()
     )

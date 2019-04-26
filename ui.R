@@ -5,6 +5,7 @@ library(gganimate)
 library(shinydashboard)
 library(latex2exp)
 
+
 common_path <- "public/project/fourier/"
 if (Sys.info()["nodename"] == "ADAM-DROPLET"){
   path_to_folder<<- paste0("/var/www/adambirenbaum.com/",common_path)
@@ -32,8 +33,9 @@ dashboardPage(
                menuSubItem("Square Wave", tabName = "square_fourier"),
                menuSubItem("Custom",tabName = "custom_fourier")
       ),
-      menuItem("Animations",tabName = "animations")
-      
+      menuItem("Animations",
+               menuSubItem("Square Wave",tabName = "square_animation")
+      )
       
     )
   ),
@@ -80,6 +82,31 @@ dashboardPage(
                        plotOutput("custom_output")
                 )
               )
+              ),
+      tabItem(tabName = "square_animation",
+              fluidRow(
+                column(width = 4,
+                       box(
+                         width = NULL, title = "Square Wave Animation", solidHeader = T,status = "primary",
+                         sliderInput("anim_square_terms",label = "Terms", min = 1, max = 50, value = 5),
+                         radioButtons("speed","Animation Speed", choices = c("200%"=1,"100%" = 2, "50%" = 3, "25%" = 4),selected = 2, inline = T),
+                         radioButtons("fps","Animation Quality",choices = c("Low" = 1,"Medium" =2,"High" = 3,"Ultra" = 4),selected = 1,inline = T)
+                       ),
+                       primaryActionButton("animation_enter","Animate")
+                       )
+
+      
+              ),
+                fluidRow(
+                  column(width = 6,
+                         imageOutput("anim1")
+                         ),
+                  column(width = 6,
+                         imageOutput("anim2")
+
+                         )
+
+                )
               )
     )
   )
